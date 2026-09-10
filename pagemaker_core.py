@@ -105,12 +105,21 @@ class Document:
             story.frame_ids.append(f.id)
         return f
 
-    def frame_order(self, page: Page):
-        return sorted((self.frames[x] for x in page.frame_ids if x in self.frames),
-                      key=lambda f: (f.column, f.rect.y, f.rect.x))
+    def add_image(self, page: Page, rect: Rect, path=""):
+        image = ImageObject(self.new_id("image"), rect, path or "")
+        self.images[image.id] = image
+        page.objects.append(image.id)
+        return image
 
     def find_frame(self, frame_id):
         return self.frames.get(frame_id)
+
+    def find_image(self, image_id):
+        return self.images.get(image_id)
+
+    def frame_order(self, page: Page):
+        return sorted((self.frames[x] for x in page.frame_ids if x in self.frames),
+                      key=lambda f: (f.column, f.rect.y, f.rect.x))
 
     def move_frame(self, frame_id, x, y):
         frame = self.frames.get(frame_id)
@@ -128,9 +137,25 @@ class Document:
         frame.rect.height = max(20.0, float(height))
         return True
 
+    def move_image(self, image_id, x, y):
+        image = self.images.get(image_id)
+        if not image or image.locked:
+            return False
+        image.rect.x = float(x)
+        image.rect.y = float(y)
+        return True
+
+    def resize_image(self, image_id, width, height):
+        image = self.images.get(image_id)
+        if not image or image.locked:
+            return False
+        image.rect.width = max(20.0, float(width))
+        image.rect.height = max(20.0, float(height))
+        return True
+
     def serialize(self):
         return {
-            "version": 3,
+            "version": 4,
             "page_width": self.page_width,
             "page_height": self.page_height,
             "masters": {k: asdict(v) for k, v in self.masters.items()},
