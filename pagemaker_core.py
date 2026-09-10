@@ -1,9 +1,4 @@
-"""PageMaker Pro core document model.
-
-UI-independent model for pages, master pages, text frames, stories and objects.
-The model deliberately separates document structure from Tkinter rendering so the
-editor can grow into a real DTP application instead of a collection of Text widgets.
-"""
+"""Core DTP document model for PageMaker Pro."""
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 
@@ -70,7 +65,6 @@ class Story:
 
 
 class Document:
-    """Canonical document model used by the future renderer and editor."""
     def __init__(self):
         self.page_width = 794
         self.page_height = 1123
@@ -112,12 +106,31 @@ class Document:
         return f
 
     def frame_order(self, page: Page):
-        return sorted((self.frames[x] for x in page.frame_ids),
+        return sorted((self.frames[x] for x in page.frame_ids if x in self.frames),
                       key=lambda f: (f.column, f.rect.y, f.rect.x))
+
+    def find_frame(self, frame_id):
+        return self.frames.get(frame_id)
+
+    def move_frame(self, frame_id, x, y):
+        frame = self.frames.get(frame_id)
+        if not frame or frame.locked:
+            return False
+        frame.rect.x = float(x)
+        frame.rect.y = float(y)
+        return True
+
+    def resize_frame(self, frame_id, width, height):
+        frame = self.frames.get(frame_id)
+        if not frame or frame.locked:
+            return False
+        frame.rect.width = max(20.0, float(width))
+        frame.rect.height = max(20.0, float(height))
+        return True
 
     def serialize(self):
         return {
-            "version": 2,
+            "version": 3,
             "page_width": self.page_width,
             "page_height": self.page_height,
             "masters": {k: asdict(v) for k, v in self.masters.items()},
