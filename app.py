@@ -63,6 +63,9 @@ class Page:
             t.tag_configure('sup', offset=6, font=(s['font'],max(7,s['size']-3)))
             t.tag_configure('sub', offset=-4, font=(s['font'],max(7,s['size']-3)))
             t.bind('<FocusIn>', lambda e,w=t:self.app.activate(w))
+            t.bind('<MouseWheel>', lambda e:self.app._workspace_wheel(e), add='+')
+            t.bind('<Button-4>', lambda e:self.app._workspace_wheel(e, -1), add='+')
+            t.bind('<Button-5>', lambda e:self.app._workspace_wheel(e, 1), add='+')
             t.bind('<KeyRelease>', lambda e,w=t:self.app.changed(w))
             t.bind('<<Paste>>', lambda e,w=t:self.app.paste(w))
             self.texts.append(t)
@@ -123,9 +126,47 @@ class App:
         self.canvas=tk.Canvas(work,highlightthickness=0); self.canvas.grid(row=1,column=1,sticky='nsew')
         work.grid_rowconfigure(1,weight=1); work.grid_columnconfigure(1,weight=1)
         sb=ttk.Scrollbar(work,orient='vertical',command=self.canvas.yview); sb.grid(row=1,column=2,sticky='ns'); self.canvas.configure(yscrollcommand=sb.set)
+        # Workspace scrolling: mouse wheel always moves the page canvas.
+        self.root.bind_all('<MouseWheel>', self._workspace_wheel, add='+')
+        self.root.bind_all('<Button-4>', lambda e: self._workspace_wheel(e, -1), add='+')
+        self.root.bind_all('<Button-5>', lambda e: self._workspace_wheel(e, 1), add='+')
+        self.root.bind_all('<Next>', lambda e: self._workspace_page(1), add='+')
+        self.root.bind_all('<Prior>', lambda e: self._workspace_page(-1), add='+')
+        self.root.bind_all('<Home>', lambda e: self._workspace_home(), add='+')
+        self.root.bind_all('<End>', lambda e: self._workspace_end(), add='+')
         self.host=tk.Frame(self.canvas); self.host_window=self.canvas.create_window((20,10),window=self.host,anchor='nw')
         self.host.bind('<Configure>',lambda e:self._canvas_layout()); self.canvas.bind('<Configure>',lambda e:self._canvas_layout())
         self.status=tk.Label(self.root,text='Ready',anchor='w',padx=10); self.status.pack(side='bottom',fill='x')
+
+    def _workspace_wheel(self, event, direction=None):
+        if direction is None:
+            delta = getattr(event, 'delta', 0)
+            if not delta:
+                return 'break'
+            direction = -1 if delta > 0 else 1
+            steps = max(1, min(6, int(abs(delta) / 120)))
+        else:
+            steps = 3
+        try:
+            self.canvas.yview_scroll(direction * steps, 'units')
+        except tk.TclError:
+            pass
+        return 'break'
+
+    def _workspace_page(self, direction):
+        try:
+            self.canvas.yview_scroll(direction * max(1, int(self.canvas.winfo_height() * 0.85)), 'units')
+        except tk.TclError:
+            pass
+        return 'break'
+
+    def _workspace_home(self):
+        self.canvas.yview_moveto(0.0)
+        return 'break'
+
+    def _workspace_end(self):
+        self.canvas.yview_moveto(1.0)
+        return 'break'
 
     def _canvas_layout(self):
         try:
