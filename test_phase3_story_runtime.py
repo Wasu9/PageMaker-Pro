@@ -16,8 +16,8 @@ def make_runtime():
 def test_live_edit_uses_story_as_source():
     doc, rt, story, a, b = make_runtime()
     rt.thread_frames(story, [a.id, b.id])
-    story, result, remaining = rt.live_edit("A" * 100, frame_ids=[a.id, b.id])
-    assert story.text == "A" * 100
+    story, result, remaining = rt.live_edit("A" * 200, frame_ids=[a.id, b.id])
+    assert story.text == "A" * 200
     assert a.text
     assert b.text
     assert remaining == ""
