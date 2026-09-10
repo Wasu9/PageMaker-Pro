@@ -17,6 +17,15 @@ def _page_for(app, fid):
     return -1,None
 
 
+def _rect_values(rect):
+    """Return x, y, width, height for Rect objects and tuple/list rectangles."""
+    if hasattr(rect, "x"):
+        return rect.x, rect.y, rect.width, rect.height
+    if isinstance(rect, (tuple, list)) and len(rect) == 4:
+        return rect[0], rect[1], rect[2], rect[3]
+    raise TypeError("frame.rect must be a Rect-like object or (x, y, width, height)")
+
+
 def draw_thread_overlay(app):
     canvas=getattr(app,"canvas",None) or getattr(app,"page_canvas",None)
     if canvas is None or not hasattr(canvas,"create_line"): return
@@ -26,20 +35,24 @@ def draw_thread_overlay(app):
     for fid,f in frames.items():
         if getattr(f,"thread_next",None) not in frames: continue
         n=frames[f.thread_next]
-        x1=f.rect.x+f.rect.width; y1=f.rect.y+f.rect.height/2
-        x2=n.rect.x; y2=n.rect.y+n.rect.height/2
+        x,y,w,h=_rect_values(f.rect)
+        nx,ny,nw,nh=_rect_values(n.rect)
+        x1=x+w; y1=y+h/2
+        x2=nx; y2=ny+nh/2
         canvas.create_line(x1,y1,x2,y2,fill="#4477aa",width=1,arrow=tk.LAST,tags="pm19-thread")
     # Overflow is represented by a small red triangle at the lower-right edge.
     for fid,f in frames.items():
         if not getattr(f,"overflow",False): continue
-        x=f.rect.x+f.rect.width; y=f.rect.y+f.rect.height
-        canvas.create_polygon(x-12,y,x,y,x,y-12,fill="#cc3333",outline="",tags="pm19-overflow")
+        x,y,w,h=_rect_values(f.rect)
+        px=x+w; py=y+h
+        canvas.create_polygon(px-12,py,px,py,px,py-12,fill="#cc3333",outline="",tags="pm19-overflow")
 
 
 def frame_ports(frame):
+    x,y,w,h=_rect_values(frame.rect)
     return {
-        "in":(frame.rect.x,frame.rect.y+frame.rect.height/2),
-        "out":(frame.rect.x+frame.rect.width,frame.rect.y+frame.rect.height/2),
+        "in":(x,y+h/2),
+        "out":(x+w,y+h/2),
     }
 
 
