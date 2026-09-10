@@ -1,9 +1,7 @@
 """Phase 4 visual/workspace interaction layer.
 
-This module deliberately stays outside the document model. It upgrades the
-existing Tk surface with DTP-style navigation, zoom shortcuts, keyboard frame
-nudging/resizing, and a clean pasteboard presentation while preserving the
-canonical Story/TextFrame model.
+Keeps the document model separate from the screen while adding PageMaker-style
+pasteboard navigation, zoom shortcuts, and precise keyboard object controls.
 """
 import tkinter as tk
 
@@ -11,24 +9,20 @@ _ORIGINAL_TK_INIT = tk.Tk.__init__
 _INSTALLED = False
 
 
-def _app(root):
-    # The prototype stores the App object nowhere on Tk, so locate it from the
-    # root's Python object graph using the known page/status attributes.
-    for obj_name in ("_pagemaker_app", "app"):
-        obj = getattr(root, obj_name, None)
-        if obj is not None:
-            return obj
-    return None
-
-
 def _find_app(root):
-    # App.ui creates a status Label and the canvas; use widget ownership and
-    # known attributes rather than global state so multiple roots remain safe.
-    for widget in root.winfo_children():
-        owner = getattr(widget, "_pagemaker_app", None)
-        if owner is not None:
+    """Find the owning PageMaker App without global state."""
+    direct = getattr(root, "_pagemaker_app", None)
+    if direct is not None:
+        return direct
+    stack = list(root.winfo_children())
+    while stack:
+        widget = stack.pop()
+        owner = getattr(widget, "app", None)
+        if owner is not None and hasattr(owner, "pages") and hasattr(owner, "zoom"):
+            root._pagemaker_app = owner
             return owner
-    return _app(root)
+        stack.extend(widget.winfo_children())
+    return None
 
 
 def _zoom_step(root, direction):
@@ -80,11 +74,10 @@ def _key_object(root, event):
     widget, frame = _selected_frame(app)
     if frame is None or not getattr(app, "_pm_select_mode", True):
         return
-    # Ignore movement while typing inside a Text widget.
     if isinstance(event.widget, tk.Text):
         return
     step = 1.0 / max(.25, float(getattr(app, "_zoom", .72)))
-    if event.state & 0x0001:  # Shift = larger movement
+    if event.state & 0x0001:
         step *= 10
     dx = dy = 0
     if event.keysym == "Left": dx = -step
@@ -93,21 +86,40 @@ def _key_object(root, event):
     elif event.keysym == "Down": dy = step
     if not (dx or dy):
         return
-    if event.state & 0x0004:  # Ctrl + arrows = resize
-        nw = frame.rect.width + dx
-        nh = frame.rect.height + dy
-        app.story_runtime.resize_frame(frame.id, nw, nh)
-        widget.place(width=max(30, int(nw * app._zoom)),
-                     height=max(30, int(nh * app._zoom)))
+    if event.state & 0x0004:
+        if dx:
+            app.story_runtime.resize_frame(frame.id, frame.rect.width + dx, frame.rect.height)
+        else:
+            app.story_runtime.resize_frame(frame.id, frame.rect.width, frame.rect.height + dy)
     else:
         app.story_runtime.move_frame(frame.id, frame.rect.x + dx, frame.rect.y + dy)
-        widget.place(x=widget.winfo_x() + int(dx * app._zoom),
-                     y=widget.winfo_y() + int(dy * app._zoom))
     try:
+        z = float(app._zoom)
+        widget.place(x=int(frame.rect.x * z), y=int(frame.rect.y * z),
+                     width=int(frame.rect.width * z), height=int(frame.rect.height * z))
         key = sitecustomize._frame_key(app, widget)
         app._pm_frame_geometry[key] = (frame.rect.x, frame.rect.y,
                                        frame.rect.width, frame.rect.height)
         sitecustomize._draw_handles(app, widget)
+    except Exception:
+        pass
+    return "break"
+
+
+def _set_100(root):
+    app = _find_app(root)
+    if app is not None and hasattr(app, "zoom"):
+        app.zoom(1.0)
+    return "break"
+
+
+def _clear(root):
+    app = _find_app(root)
+    if app is None:
+        return
+    try:
+        from sitecustomize import _clear_selection
+        _clear_selection(app)
     except Exception:
         pass
     return "break"
@@ -128,29 +140,8 @@ def _bind(root):
     root.bind_all("<PageDown>", lambda e: _page(root, 1), add="+")
     root.bind_all("<PageUp>", lambda e: _page(root, -1), add="+")
     root.bind_all("<Escape>", lambda e: _clear(root), add="+")
-    root.bind_all("<KeyPress-Left>", lambda e: _key_object(root, e), add="+")
-    root.bind_all("<KeyPress-Right>", lambda e: _key_object(root, e), add="+")
-    root.bind_all("<KeyPress-Up>", lambda e: _key_object(root, e), add="+")
-    root.bind_all("<KeyPress-Down>", lambda e: _key_object(root, e), add="+")
-
-
-def _set_100(root):
-    app = _find_app(root)
-    if app is not None and hasattr(app, "zoom"):
-        app.zoom(1.0)
-    return "break"
-
-
-def _clear(root):
-    app = _find_app(root)
-    if app is None:
-        return
-    try:
-        from sitecustomize import _clear_selection
-        _clear_selection(app)
-    except Exception:
-        pass
-    return "break"
+    for key in ("Left", "Right", "Up", "Down"):
+        root.bind_all("<KeyPress-%s>" % key, lambda e: _key_object(root, e), add="+")
 
 
 def _tk_init(self, *args, **kwargs):
