@@ -1,0 +1,51 @@
+name: Build PageMaker Pro Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller pytest
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
+      - name: Run headless regression tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$PWD"
+          python -m pytest -q
+
+      - name: Build Windows executable
+        run: python -m PyInstaller --clean --noconfirm PageMaker-Pro.spec
+
+      - name: Verify executable exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'dist/PageMaker-Pro.exe')) { throw 'EXE was not produced' }
+          Get-Item 'dist/PageMaker-Pro.exe' | Format-List Name,Length,FullName
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: PageMaker-Pro-Windows
+          path: dist/PageMaker-Pro.exe
+          if-no-files-found: error
+          retention-days: 30
