@@ -17,6 +17,7 @@ import phase15_mixed_runs  # noqa: F401
 import phase16_paragraph_engine  # noqa: F401
 import phase17_pagination_engine  # noqa: F401
 import phase18_text_frames  # noqa: F401
+import phase19_threading_ui  # noqa: F401
 
 @dataclass
 class ViewState:
