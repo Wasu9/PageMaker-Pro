@@ -1,7 +1,7 @@
 """Runtime bridge for PageMaker Pro stories and text frames.
 
-The Tk widgets remain views/editors, while this module owns the canonical
-story text and frame sequence used for DTP flow decisions.
+Tk widgets remain the editing view, while this module owns canonical story text
+and frame sequence used for DTP flow decisions.
 """
 from flow_engine import FlowEngine
 
@@ -9,7 +9,7 @@ from flow_engine import FlowEngine
 class StoryRuntime:
     def __init__(self, document):
         self.document = document
-        self.engine = FlowEngine(document)
+        self.engine = FlowEngine()
         self.active_story_id = None
 
     def ensure_story(self, text=""):
@@ -21,19 +21,15 @@ class StoryRuntime:
 
     def set_text(self, story, text):
         story.text = text or ""
-        for fid in story.frame_ids:
-            if fid in self.document.frames:
-                self.document.frames[fid].text = ""
 
     def ordered_frame_ids(self, story):
         return list(story.frame_ids)
 
     def distribute(self, story, capacities, mode="next_column"):
-        """Calculate frame allocation without touching Tk widgets."""
-        return self.engine.distribute(story, capacities, mode=mode)
+        return self.engine.distribute(self.document, story, capacities, mode=mode)
 
     def sync_frames_from_result(self, story, result):
-        for fid, text in zip(story.frame_ids, result.frames):
-            if fid in self.document.frames:
-                self.document.frames[fid].text = text
-        return result.overflow
+        for item in result:
+            if item.frame_id in self.document.frames:
+                self.document.frames[item.frame_id].text = item.text
+        return result
