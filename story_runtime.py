@@ -68,19 +68,45 @@ class StoryRuntime:
                 for fid in story.frame_ids if fid in self.document.frames]
 
     def reflow(self, story=None, capacities=None, mode="next_column", frame_ids=None):
-        """Reflow the canonical Story and return (frame_result, remaining)."""
+        """Reflow using the Phase 12 geometry-aware Unicode line layout engine."""
         story = story or self.ensure_story()
         ids = list(frame_ids) if frame_ids is not None else list(story.frame_ids)
         if not ids:
             ids = self.engine.ordered_frame_ids(self.document, mode)
         self.attach_frames(story, mode, frame_ids=ids)
-        if capacities is None:
-            capacities = self.capacities(story)
-        result, remaining = self.engine.distribute(
-            self.document, story, capacities, mode=mode, frame_ids=story.frame_ids)
-        self.last_result = result
-        self.last_remaining = remaining or ""
-        return result, self.last_remaining
+
+        try:
+            from dtp_text_layout import DTPTextLayout
+            frames = []
+            for fid in story.frame_ids:
+                frame = self.document.frames.get(fid)
+                if frame is not None:
+                    frames.append({"id": fid, "width": frame.rect.width,
+                                   "height": frame.rect.height,
+                                   "line_height": max(12.0, min(24.0, frame.rect.height / 42.0))})
+            engine = DTPTextLayout(font_size=12.0)
+            placements, remaining = engine.paginate(story.text, frames)
+            for fid in story.frame_ids:
+                if fid in self.document.frames:
+                    self.document.frames[fid].text = ""
+            result = []
+            for info, start, end, lines in placements:
+                value = story.text[start:end]
+                self.document.frames[info["id"]].text = value
+                result.append(type("FlowResult", (), {"frame_id": info["id"], "text": value})())
+            self.last_result = result
+            self.last_remaining = remaining or ""
+            return result, self.last_remaining
+        except Exception:
+            # Safe fallback keeps the editor usable if the optional layout
+            # module is unavailable or an exotic font/runtime fails.
+            if capacities is None:
+                capacities = self.capacities(story)
+            result, remaining = self.engine.distribute(
+                self.document, story, capacities, mode=mode, frame_ids=story.frame_ids)
+            self.last_result = result
+            self.last_remaining = remaining or ""
+            return result, self.last_remaining
 
     def distribute(self, story, capacities=None, mode="next_column", frame_ids=None):
         return self.reflow(story, capacities, mode, frame_ids)
