@@ -23,13 +23,25 @@ class StoryRuntime:
         story.text = text or ""
 
     def attach_frames(self, story, mode="next_column", frame_ids=None):
-        """Thread all text frames into one Story in deterministic order."""
+        """Attach an explicit thread when supplied; otherwise use flow order."""
         ids = list(frame_ids) if frame_ids is not None else self.engine.ordered_frame_ids(self.document, mode)
         ids = [fid for fid in ids if fid in self.document.frames]
         story.frame_ids = ids
         for fid, frame in self.document.frames.items():
             frame.story_id = story.id if fid in ids else None
         return list(ids)
+
+    def thread_frames(self, story, frame_ids):
+        return self.attach_frames(story, frame_ids=list(frame_ids))
+
+    def unthread_after(self, story, frame_id):
+        if frame_id not in story.frame_ids:
+            return list(story.frame_ids)
+        index = story.frame_ids.index(frame_id) + 1
+        story.frame_ids = story.frame_ids[:index]
+        for fid, frame in self.document.frames.items():
+            frame.story_id = story.id if fid in story.frame_ids else None
+        return list(story.frame_ids)
 
     @staticmethod
     def capacity_for_frame(frame, chars_per_line=95, line_height=17):
@@ -41,8 +53,11 @@ class StoryRuntime:
         return [self.capacity_for_frame(self.document.frames[fid])
                 for fid in story.frame_ids if fid in self.document.frames]
 
-    def distribute(self, story, capacities=None, mode="next_column"):
-        self.attach_frames(story, mode)
+    def distribute(self, story, capacities=None, mode="next_column", frame_ids=None):
+        ids = list(frame_ids) if frame_ids is not None else list(story.frame_ids)
+        if not ids:
+            ids = self.engine.ordered_frame_ids(self.document, mode)
+        self.attach_frames(story, mode, frame_ids=ids)
         if capacities is None:
             capacities = self.capacities(story)
         return self.engine.distribute(self.document, story, capacities,
