@@ -4,6 +4,7 @@ Phase 3 makes the Story the live editing source of truth. UI adapters can push
 an edit into the Story, reflow it through the current thread, and render the
 result back to frame widgets without rebuilding the document.
 """
+import sys
 from flow_engine import FlowEngine
 
 
@@ -85,11 +86,7 @@ class StoryRuntime:
         return self.reflow(story, capacities, mode, frame_ids)
 
     def live_edit(self, text, mode="next_column", frame_ids=None, capacities=None):
-        """Single entry point for a UI key/edit event.
-
-        The edit is committed to the Story first; layout is then recalculated
-        from the Story and the frame text is updated by the caller's renderer.
-        """
+        """Commit an edit to Story, then immediately calculate its new flow."""
         story = self.edit_story(text)
         result, remaining = self.reflow(
             story, capacities=capacities, mode=mode, frame_ids=frame_ids)
@@ -100,3 +97,57 @@ class StoryRuntime:
 
     def resize_frame(self, frame_id, width, height):
         return self.document.resize_frame(frame_id, width, height)
+
+
+def _install_live_editor_patch(app):
+    """Debounced UI adapter: every edit becomes a Story edit and reflow."""
+    if getattr(app, '_pm_phase3_live_patch', False):
+        return
+    app._pm_phase3_live_patch = True
+    original_changed = app.changed
+
+    def changed(widget=None):
+        original_changed(widget)
+        if getattr(app, '_pm_rendering', False) or getattr(app, '_pm_canonical_busy', False):
+            return
+        try:
+            pending = getattr(app, '_pm_live_reflow_after', None)
+            if pending:
+                app.root.after_cancel(pending)
+            app._pm_live_reflow_after = app.root.after(180, _run)
+        except Exception:
+            pass
+
+    def _run():
+        app._pm_live_reflow_after = None
+        if getattr(app, '_pm_rendering', False) or getattr(app, '_pm_canonical_busy', False):
+            return
+        try:
+            from sitecustomize import _reflow_story
+            _reflow_story(app)
+        except Exception:
+            pass
+
+    app.changed = changed
+
+
+_profile_installed = False
+
+
+def _phase3_profile(frame, event, arg):
+    if event == 'return' and frame.f_code.co_name == '__init__':
+        app = frame.f_locals.get('self')
+        if app is not None and app.__class__.__name__ == 'App':
+            try:
+                _install_live_editor_patch(app)
+            except Exception:
+                pass
+    return _phase3_profile
+
+
+if not _profile_installed:
+    try:
+        sys.setprofile(_phase3_profile)
+        _profile_installed = True
+    except Exception:
+        pass
