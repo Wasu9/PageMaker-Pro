@@ -20,6 +20,7 @@ import phase18_text_frames  # noqa: F401
 import phase19_threading_ui  # noqa: F401
 import phase20_text_frame_tools  # noqa: F401
 import phase21_text_engine  # noqa: F401
+import phase22_objects_tables  # noqa: F401
 
 @dataclass
 class ViewState:
