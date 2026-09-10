@@ -97,10 +97,11 @@ def _key_object(root, event):
         z = float(app._zoom)
         widget.place(x=int(frame.rect.x * z), y=int(frame.rect.y * z),
                      width=int(frame.rect.width * z), height=int(frame.rect.height * z))
-        key = sitecustomize._frame_key(app, widget)
+        from sitecustomize import _frame_key, _draw_handles
+        key = _frame_key(app, widget)
         app._pm_frame_geometry[key] = (frame.rect.x, frame.rect.y,
                                        frame.rect.width, frame.rect.height)
-        sitecustomize._draw_handles(app, widget)
+        _draw_handles(app, widget)
     except Exception:
         pass
     return "break"
@@ -137,8 +138,10 @@ def _bind(root):
     root.bind_all("<Control-KeyPress-minus>", lambda e: _zoom_step(root, -1), add="+")
     root.bind_all("<Control-KeyPress-0>", lambda e: _fit(root), add="+")
     root.bind_all("<Control-KeyPress-1>", lambda e: _set_100(root), add="+")
-    root.bind_all("<PageDown>", lambda e: _page(root, 1), add="+")
-    root.bind_all("<PageUp>", lambda e: _page(root, -1), add="+")
+    # Tk uses X11-style keysyms for Page Up/Down: Prior / Next.
+    # "PageDown" and "PageUp" are invalid Tk binding event names on Windows.
+    root.bind_all("<Next>", lambda e: _page(root, 1), add="+")
+    root.bind_all("<Prior>", lambda e: _page(root, -1), add="+")
     root.bind_all("<Escape>", lambda e: _clear(root), add="+")
     for key in ("Left", "Right", "Up", "Down"):
         root.bind_all("<KeyPress-%s>" % key, lambda e: _key_object(root, e), add="+")
