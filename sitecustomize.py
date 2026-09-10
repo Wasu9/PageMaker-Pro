@@ -1,13 +1,15 @@
 """PageMaker Pro runtime integration.
 
-This module is intentionally UI-light: it bridges the existing Tk editor to the
-new document/workspace architecture while the renderer is being migrated.
+Bridges the legacy Tk editor to the canonical DTP document model. The editor
+widgets remain the immediate editing surface, while one Story owns the text
+and TextFrames define its page/column threading order.
 """
 import sys
 import tkinter as tk
 
 from pagemaker_core import Document, Rect
 from pagemaker_workspace import WorkspaceController
+from story_runtime import StoryRuntime
 
 _orig_tk_init = tk.Tk.__init__
 
@@ -43,12 +45,30 @@ def _canvas_fix(root):
     root.after(250, refresh)
 
 
-def _sync_document(app):
-    """Mirror the legacy Tk pages into the new model without changing editing yet."""
+def _mode(app):
+    """Map the legacy flow selector to the canonical engine mode."""
+    try:
+        value = app.flow_var.get()
+    except Exception:
+        return "next_column"
+    if "Same Column" in value:
+        return "same_column"
+    if "Ask Me" in value:
+        return "ask"
+    return "next_column"
+
+
+def _sync_document(app, preserve_story=True):
+    """Build the canonical document and ONE threaded Story from all pages."""
     try:
         doc = Document()
         doc.pages.clear()
+        doc.stories.clear()
+        doc.frames.clear()
         doc.next_page_number = 1
+        doc._id_counter = 1
+
+        # First create all physical pages and all column frames.
         for p in app.pages:
             mp = doc.add_page()
             mp.number = p.number
@@ -57,19 +77,101 @@ def _sync_document(app):
             mp.margin = float(app.settings.get('margin', 45))
             mp.columns = len(p.texts) or int(app.settings.get('columns', 2))
             mp.column_gap = float(app.settings.get('gap', 24))
-            if p.texts:
-                story = doc.add_story('\n'.join(t.get('1.0', 'end-1c') for t in p.texts))
-                total = mp.width - 2 * mp.margin
-                gap = mp.column_gap
-                cw = max(1, (total - gap * (mp.columns - 1)) / mp.columns)
-                top = 48
-                bottom = mp.height - 52
-                for ci in range(mp.columns):
-                    x = mp.margin + ci * (cw + gap)
-                    frame = doc.add_text_frame(mp,
-                        Rect(x, top, cw, max(1, bottom - top)), story, ci)
-                    frame.text = p.texts[ci].get('1.0', 'end-1c')
+            total = mp.width - 2 * mp.margin
+            gap = mp.column_gap
+            cw = max(1, (total - gap * (mp.columns - 1)) / mp.columns)
+            top = 48
+            bottom = mp.height - 52
+            for ci in range(mp.columns):
+                x = mp.margin + ci * (cw + gap)
+                doc.add_text_frame(mp, Rect(x, top, cw, max(1, bottom - top)), None, ci)
+
+        # Exactly one story for the document. Existing widget text is treated
+        # as the source when rebuilding the bridge, preserving current edits.
+        old_story = getattr(getattr(app, 'document', None), 'stories', {})
+        old_text = ''
+        old_ids = list(old_story.keys()) if old_story else []
+        if preserve_story and old_ids:
+            try:
+                old_text = old_story[old_ids[0]].text
+            except Exception:
+                old_text = ''
+        widget_text = '\n'.join(
+            t.get('1.0', 'end-1c')
+            for p in app.pages for t in getattr(p, 'texts', [])
+        )
+        story = doc.add_story(old_text if old_text and not widget_text else widget_text)
         app.document = doc
+        app.story_runtime = StoryRuntime(doc)
+        app.story_runtime.active_story_id = story.id
+        app.story_runtime.attach_frames(story, _mode(app))
+
+        # Preserve each widget's existing visible text as the view. The model
+        # is only used for reflow when the user explicitly invokes overflow.
+        for p in app.pages:
+            for ci, t in enumerate(getattr(p, 'texts', [])):
+                if ci < len(p.frame_ids) if hasattr(p, 'frame_ids') else False:
+                    pass
+        return story
+    except Exception:
+        return None
+
+
+def _collect_widget_text(app):
+    return '\n'.join(
+        t.get('1.0', 'end-1c')
+        for p in app.pages for t in getattr(p, 'texts', [])
+    )
+
+
+def _render_story(app, story, result):
+    """Render model frame text back into the matching legacy Text widgets."""
+    try:
+        for pidx, p in enumerate(app.pages):
+            for ci, widget in enumerate(getattr(p, 'texts', [])):
+                fid = None
+                if pidx < len(app.document.pages):
+                    frames = app.document.frame_order(app.document.pages[pidx])
+                    if ci < len(frames):
+                        fid = frames[ci].id
+                if not fid:
+                    continue
+                value = app.document.frames[fid].text
+                widget.delete('1.0', 'end')
+                widget.insert('1.0', value)
+    except Exception:
+        pass
+
+
+def _reflow_story(app):
+    """Canonical overflow/reflow entry point used by the existing UI."""
+    try:
+        # Current widgets are the user's editable source. Rebuild the single
+        # story from them, then distribute through the selected threading mode.
+        text = _collect_widget_text(app)
+        story = _sync_document(app, preserve_story=False)
+        if story is None:
+            return
+        app.story_runtime.set_text(story, text)
+        mode = _mode(app)
+        app.story_runtime.attach_frames(story, mode)
+        result, remaining = app.story_runtime.distribute(story, mode=mode)
+
+        # Ask Me deliberately does not invent a destination. It leaves the
+        # existing legacy dialog/reflow path available for the user's choice.
+        if mode == 'ask' and remaining:
+            try:
+                app.status.config(text='Story overflow: choose next page/column from Flow')
+            except Exception:
+                pass
+            return
+
+        _render_story(app, story, result)
+        try:
+            app.status.config(text='Story threaded through text frames' +
+                              (' (overflow remains)' if remaining else ''))
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -96,10 +198,6 @@ def _show_page(app, index):
         pass
     try:
         app.status.config(text=f'Page {p.number} of {len(app.pages)}')
-    except Exception:
-        pass
-    try:
-        _sync_document(app)
     except Exception:
         pass
     _refresh_nav(app)
@@ -146,14 +244,14 @@ def _install_page_wrapper(app):
 
     def new_document():
         result = original_new()
-        _sync_document(app)
+        _sync_document(app, preserve_story=False)
         if app.pages:
             _show_page(app, 0)
         return result
 
     def open_document():
         result = original_open()
-        _sync_document(app)
+        _sync_document(app, preserve_story=False)
         if app.pages:
             _show_page(app, 0)
         return result
@@ -169,11 +267,9 @@ def _enhance(app):
         return
     app._pm_enhanced = True
 
-    # New architecture objects. The legacy editor remains the editing surface
-    # temporarily, while these become the canonical page/workspace state.
     app.document = Document()
     app.workspace = WorkspaceController(app.document)
-    _sync_document(app)
+    _sync_document(app, preserve_story=False)
     _install_page_wrapper(app)
 
     nav = tk.Frame(app.root, height=38, bd=1, relief='sunken')
@@ -197,18 +293,25 @@ def _enhance(app):
             app.root.after(700, refresh)
         except Exception:
             pass
-
     refresh()
 
-    # Keyboard navigation is page navigation, not canvas scrolling.
     app.root.bind_all('<Next>', lambda e: (_show_page(app, app.workspace.next_page()), 'break')[1], add='+')
     app.root.bind_all('<Prior>', lambda e: (_show_page(app, app.workspace.previous_page()), 'break')[1], add='+')
     app.root.bind_all('<Control-Home>', lambda e: (_show_page(app, 0), 'break')[1], add='+')
     app.root.bind_all('<Control-End>', lambda e: (_show_page(app, len(app.pages) - 1), 'break')[1], add='+')
 
-    # Replace the old horizontal multi-page presentation with one active page.
     if app.pages:
         _show_page(app, 0)
+
+    # Make the existing Reflow command use the canonical Story engine.
+    if not getattr(app, '_pm_reflow_wrapped', False):
+        original_reflow = app.reflow
+        def canonical_reflow(*args, **kwargs):
+            _reflow_story(app)
+            return None
+        app.reflow = canonical_reflow
+        app._pm_original_reflow = original_reflow
+        app._pm_reflow_wrapped = True
 
     # Unicode-first equation builder.
     def equation():
@@ -232,7 +335,6 @@ def _enhance(app):
         for s in symbols:
             tk.Button(bar, text=s, width=3, command=lambda s=s: e.insert('insert', s)).pack(side='left', padx=1, pady=1)
         row = tk.Frame(w); row.pack(fill='x', padx=12, pady=8)
-
         def add(v):
             e.insert('insert', v); e.focus_set()
         def frac():
@@ -254,7 +356,6 @@ def _enhance(app):
                 app.changed()
                 w.destroy()
         tk.Button(w, text='Insert Equation', command=insert).pack(pady=10)
-
     app.math = equation
     app.root.bind_all('<Control-Alt-m>', lambda e: (equation(), 'break')[1], add='+')
 
