@@ -1,4 +1,9 @@
-"""Canonical Story/TextFrame runtime for PageMaker Pro."""
+"""Canonical Story/TextFrame runtime for PageMaker Pro.
+
+Phase 3 makes the Story the live editing source of truth. UI adapters can push
+an edit into the Story, reflow it through the current thread, and render the
+result back to frame widgets without rebuilding the document.
+"""
 from flow_engine import FlowEngine
 
 
@@ -7,6 +12,8 @@ class StoryRuntime:
         self.document = document
         self.engine = FlowEngine()
         self.active_story_id = None
+        self.last_remaining = ""
+        self.last_result = []
 
     def ensure_story(self, text=""):
         story = self.story()
@@ -22,8 +29,14 @@ class StoryRuntime:
     def set_text(self, story, text):
         story.text = text or ""
 
+    def edit_story(self, text, story=None):
+        """Update the canonical story without touching any UI widget."""
+        story = story or self.ensure_story()
+        story.text = text or ""
+        return story
+
     def attach_frames(self, story, mode="next_column", frame_ids=None):
-        """Attach an explicit thread when supplied; otherwise use flow order."""
+        """Attach an explicit persistent thread when supplied."""
         ids = list(frame_ids) if frame_ids is not None else self.engine.ordered_frame_ids(self.document, mode)
         ids = [fid for fid in ids if fid in self.document.frames]
         story.frame_ids = ids
@@ -53,15 +66,34 @@ class StoryRuntime:
         return [self.capacity_for_frame(self.document.frames[fid])
                 for fid in story.frame_ids if fid in self.document.frames]
 
-    def distribute(self, story, capacities=None, mode="next_column", frame_ids=None):
+    def reflow(self, story=None, capacities=None, mode="next_column", frame_ids=None):
+        """Reflow the canonical Story and return (frame_result, remaining)."""
+        story = story or self.ensure_story()
         ids = list(frame_ids) if frame_ids is not None else list(story.frame_ids)
         if not ids:
             ids = self.engine.ordered_frame_ids(self.document, mode)
         self.attach_frames(story, mode, frame_ids=ids)
         if capacities is None:
             capacities = self.capacities(story)
-        return self.engine.distribute(self.document, story, capacities,
-                                      mode=mode, frame_ids=story.frame_ids)
+        result, remaining = self.engine.distribute(
+            self.document, story, capacities, mode=mode, frame_ids=story.frame_ids)
+        self.last_result = result
+        self.last_remaining = remaining or ""
+        return result, self.last_remaining
+
+    def distribute(self, story, capacities=None, mode="next_column", frame_ids=None):
+        return self.reflow(story, capacities, mode, frame_ids)
+
+    def live_edit(self, text, mode="next_column", frame_ids=None, capacities=None):
+        """Single entry point for a UI key/edit event.
+
+        The edit is committed to the Story first; layout is then recalculated
+        from the Story and the frame text is updated by the caller's renderer.
+        """
+        story = self.edit_story(text)
+        result, remaining = self.reflow(
+            story, capacities=capacities, mode=mode, frame_ids=frame_ids)
+        return story, result, remaining
 
     def move_frame(self, frame_id, x, y):
         return self.document.move_frame(frame_id, x, y)
