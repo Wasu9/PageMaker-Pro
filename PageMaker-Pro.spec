@@ -1,7 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
 
+# Tkinter is the actual desktop GUI runtime. Force both the Python package and
+# the native _tkinter extension into the frozen Windows application so the
+# EXE cannot start without its GUI runtime.
 hiddenimports = [
+    'tkinter', '_tkinter',
+    'tkinter.ttk', 'tkinter.filedialog', 'tkinter.messagebox',
+    'tkinter.simpledialog', 'tkinter.colorchooser',
     'sitecustomize', 'pagemaker_core', 'flow_engine', 'story_runtime',
     'pagemaker_workspace', 'equation_engine', 'dtp_text_layout',
     'phase4_visual', 'phase5_canvas', 'phase5_bootstrap', 'phase6_object_editing',
@@ -13,6 +19,10 @@ hiddenimports = [
     'phase21_text_engine', 'phase22_objects_tables', 'phase23_document_system',
     'phase24_release_qa',
 ]
+
+# Also discover tkinter's standard submodules. The _tkinter hidden import
+# activates PyInstaller's Tcl/Tk collection hook on Windows.
+hiddenimports += collect_submodules('tkinter')
 
 a = Analysis(
     ['app.py'], pathex=['.'], binaries=[], datas=[], hiddenimports=hiddenimports,
