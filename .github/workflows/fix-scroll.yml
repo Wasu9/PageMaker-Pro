@@ -1,0 +1,59 @@
+name: Fix PageMaker workspace scrolling
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-scroll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch app.py scrolling
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app.py')
+          s = p.read_text(encoding='utf-8')
+
+          if 'def _workspace_wheel(self, event):' in s:
+              print('Scrolling patch already present')
+              raise SystemExit(0)
+
+          anchor = "        sb=ttk.Scrollbar(work,orient='vertical',command=self.canvas.yview); sb.grid(row=1,column=2,sticky='ns'); self.canvas.configure(yscrollcommand=sb.set)"
+          replacement = anchor + "\n        # Workspace scrolling: mouse wheel always moves the page canvas.\n        self.root.bind_all('<MouseWheel>', self._workspace_wheel, add='+')\n        self.root.bind_all('<Button-4>', lambda e: self._workspace_wheel(e, -1), add='+')\n        self.root.bind_all('<Button-5>', lambda e: self._workspace_wheel(e, 1), add='+')\n        self.root.bind_all('<Next>', lambda e: self._workspace_page(1), add='+')\n        self.root.bind_all('<Prior>', lambda e: self._workspace_page(-1), add='+')\n        self.root.bind_all('<Home>', lambda e: self._workspace_home(), add='+')\n        self.root.bind_all('<End>', lambda e: self._workspace_end(), add='+')"
+          if anchor not in s:
+              raise SystemExit('scrollbar anchor not found')
+          s = s.replace(anchor, replacement, 1)
+
+          text_anchor = "            t.bind('<FocusIn>', lambda e,w=t:self.app.activate(w))\n            t.bind('<KeyRelease>', lambda e,w=t:self.app.changed(w))"
+          text_replacement = "            t.bind('<FocusIn>', lambda e,w=t:self.app.activate(w))\n            t.bind('<MouseWheel>', lambda e:self.app._workspace_wheel(e), add='+')\n            t.bind('<Button-4>', lambda e:self.app._workspace_wheel(e, -1), add='+')\n            t.bind('<Button-5>', lambda e:self.app._workspace_wheel(e, 1), add='+')\n            t.bind('<KeyRelease>', lambda e,w=t:self.app.changed(w))"
+          if text_anchor not in s:
+              raise SystemExit('text binding anchor not found')
+          s = s.replace(text_anchor, text_replacement, 1)
+
+          method_anchor = "    def _canvas_layout(self):\n"
+          methods = '''    def _workspace_wheel(self, event, direction=None):\n        if direction is None:\n            delta = getattr(event, 'delta', 0)\n            if not delta:\n                return 'break'\n            direction = -1 if delta > 0 else 1\n            steps = max(1, min(6, int(abs(delta) / 120)))\n        else:\n            steps = 3\n        try:\n            self.canvas.yview_scroll(direction * steps, 'units')\n        except tk.TclError:\n            pass\n        return 'break'\n\n    def _workspace_page(self, direction):\n        try:\n            self.canvas.yview_scroll(direction * max(1, int(self.canvas.winfo_height() * 0.85)), 'units')\n        except tk.TclError:\n            pass\n        return 'break'\n\n    def _workspace_home(self):\n        self.canvas.yview_moveto(0.0)\n        return 'break'\n\n    def _workspace_end(self):\n        self.canvas.yview_moveto(1.0)\n        return 'break'\n\n'''
+          if method_anchor not in s:
+              raise SystemExit('method anchor not found')
+          s = s.replace(method_anchor, methods + method_anchor, 1)
+
+          p.write_text(s, encoding='utf-8')
+          print('Patched app.py')
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.py
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'Fix mouse wheel scrolling in DTP workspace'
+            git push
+          fi
