@@ -6,9 +6,10 @@ pasteboard around the page.
 """
 from dataclasses import dataclass
 
-# Imported here so the visual interaction layer is loaded before the main App
-# is constructed. It wraps Tk safely and does not alter the document model.
+# Visual layers load before App construction. They preserve the canonical
+# Document/Story model and only add workspace/object interaction.
 import phase4_visual  # noqa: F401
+import phase5_canvas  # noqa: F401
 
 
 @dataclass
