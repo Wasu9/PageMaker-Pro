@@ -46,20 +46,20 @@ class StoryRuntime:
 
     def capacities(self, story):
         return [self.capacity_for_frame(self.document.frames[fid])
-                for fid in story.frame_ids
-                if fid in self.document.frames]
-
-    def distribute(self, story, capacities=None, mode="next_column"):
-        self.attach_frames(story, mode)
-        if capacities is None:
-            capacities = self.capacities(story)
-        return self.engine.distribute(self.document, story, capacities,
-                                      mode=mode, frame_ids=story.frame_ids)
+                for fid in story.frame_ids if fid in self.document.frames]
 
     def clear_frame_text(self, story):
         for fid in story.frame_ids:
             if fid in self.document.frames:
                 self.document.frames[fid].text = ""
+
+    def distribute(self, story, capacities=None, mode="next_column"):
+        self.attach_frames(story, mode)
+        self.clear_frame_text(story)
+        if capacities is None:
+            capacities = self.capacities(story)
+        return self.engine.distribute(self.document, story, capacities,
+                                      mode=mode, frame_ids=story.frame_ids)
 
     def sync_frames_from_result(self, story, result):
         for item in result:
