@@ -1,11 +1,41 @@
 # -*- mode: python ; coding: utf-8 -*-
+import glob
+import os
+import sys
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-# Explicitly collect the complete Tkinter runtime. PyInstaller normally has a
-# Tk hook, but this project must ship as a standalone one-file Windows EXE.
+# Tkinter's Python package is not the same thing as Tcl/Tk's script libraries.
+# _tkinter can be present while Tcl's init.tcl is missing, which makes a frozen
+# GUI fail at startup. Collect both pieces explicitly.
 tk_datas, tk_binaries, tk_hiddenimports = collect_all('tkinter')
 tk_hiddenimports += collect_submodules('tkinter')
 tk_hiddenimports += ['_tkinter']
+
+# Locate the Tcl/Tk script libraries from the exact Python installation used by
+# the Windows GitHub Actions runner. Versions are discovered dynamically so the
+# spec does not depend on a hard-coded Tcl/Tk minor version.
+tcl_root = os.path.join(sys.base_prefix, 'tcl')
+tcl_dirs = sorted(glob.glob(os.path.join(tcl_root, 'tcl*')))
+tk_dirs = sorted(glob.glob(os.path.join(tcl_root, 'tk*')))
+
+# Keep only actual Tcl/Tk library directories (not unrelated files).
+tcl_dir = next((p for p in tcl_dirs if os.path.isdir(p) and os.path.isfile(os.path.join(p, 'init.tcl'))), None)
+tk_dir = next((p for p in tk_dirs if os.path.isdir(p) and os.path.isfile(os.path.join(p, 'tk.tcl'))), None)
+
+if not tcl_dir or not tk_dir:
+    raise RuntimeError(
+        f'Tcl/Tk runtime not found under {tcl_root!r}: '
+        f'tcl={tcl_dirs!r}, tk={tk_dirs!r}'
+    )
+
+# Preserve the directory names expected by Tk at runtime.
+tcl_name = os.path.basename(tcl_dir)
+tk_name = os.path.basename(tk_dir)
+tk_datas += [
+    (tcl_dir, os.path.join('tcl', tcl_name)),
+    (tk_dir, os.path.join('tcl', tk_name)),
+]
 
 hiddenimports = [
     'tkinter', '_tkinter',
