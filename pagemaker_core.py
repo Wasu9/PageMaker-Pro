@@ -18,6 +18,8 @@ class TextFrame:
     text: str = ""
     locked: bool = False
     visible: bool = True
+    thread_prev: Optional[str] = None
+    thread_next: Optional[str] = None
 
 @dataclass
 class ImageObject:
@@ -145,7 +147,7 @@ class Document:
         t.rect.width=max(30.,float(width)); t.rect.height=max(20.,float(height)); return True
 
     def serialize(self):
-        return {"version":5,"page_width":self.page_width,"page_height":self.page_height,
+        return {"version":6,"page_width":self.page_width,"page_height":self.page_height,
                 "masters":{k:asdict(v) for k,v in self.masters.items()},"pages":[asdict(p) for p in self.pages],
                 "stories":{k:asdict(v) for k,v in self.stories.items()},"frames":{k:asdict(v) for k,v in self.frames.items()},
                 "images":{k:asdict(v) for k,v in self.images.items()},"tables":{k:asdict(v) for k,v in self.tables.items()},
