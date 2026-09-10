@@ -52,3 +52,13 @@ def install(root):
             p5.refresh_all(app)
     except Exception:
         pass
+
+
+# Import-time safety: install() is retried after App construction.
+_old_tk_init = tk.Tk.__init__
+if not getattr(_old_tk_init, "_pm5_bootstrap_wrapped", False):
+    def _tk_init(self, *args, **kwargs):
+        _old_tk_init(self, *args, **kwargs)
+        self.after(180, lambda: install(self))
+    _tk_init._pm5_bootstrap_wrapped = True
+    tk.Tk.__init__ = _tk_init
