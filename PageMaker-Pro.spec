@@ -1,9 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-# Tkinter is the actual desktop GUI runtime. Force both the Python package and
-# the native _tkinter extension into the frozen Windows application so the
-# EXE cannot start without its GUI runtime.
+# Explicitly collect the complete Tkinter runtime. PyInstaller normally has a
+# Tk hook, but this project must ship as a standalone one-file Windows EXE.
+tk_datas, tk_binaries, tk_hiddenimports = collect_all('tkinter')
+tk_hiddenimports += collect_submodules('tkinter')
+tk_hiddenimports += ['_tkinter']
+
 hiddenimports = [
     'tkinter', '_tkinter',
     'tkinter.ttk', 'tkinter.filedialog', 'tkinter.messagebox',
@@ -18,20 +21,24 @@ hiddenimports = [
     'phase18_text_frames', 'phase19_threading_ui', 'phase20_text_frame_tools',
     'phase21_text_engine', 'phase22_objects_tables', 'phase23_document_system',
     'phase24_release_qa',
-]
-
-# Also discover tkinter's standard submodules. The _tkinter hidden import
-# activates PyInstaller's Tcl/Tk collection hook on Windows.
-hiddenimports += collect_submodules('tkinter')
+] + tk_hiddenimports
 
 a = Analysis(
-    ['app.py'], pathex=['.'], binaries=[], datas=[], hiddenimports=hiddenimports,
-    hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=[], noarchive=False,
+    ['app.py'],
+    pathex=['.'],
+    binaries=tk_binaries,
+    datas=tk_datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
 )
 
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.datas, [],
     name='PageMaker-Pro', debug=False, bootloader_ignore_signals=False,
-    strip=False, upx=True, console=False,
+    strip=False, upx=False, console=False,
 )
