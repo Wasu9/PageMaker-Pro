@@ -10,6 +10,7 @@ from dataclasses import dataclass
 # Document/Story model and only add workspace/object interaction.
 import phase4_visual  # noqa: F401
 import phase5_canvas  # noqa: F401
+import phase5_bootstrap  # noqa: F401
 
 
 @dataclass
