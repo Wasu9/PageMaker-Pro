@@ -22,6 +22,7 @@ import phase20_text_frame_tools  # noqa: F401
 import phase21_text_engine  # noqa: F401
 import phase22_objects_tables  # noqa: F401
 import phase23_document_system  # noqa: F401
+import phase24_release_qa  # noqa: F401
 
 @dataclass
 class ViewState:
