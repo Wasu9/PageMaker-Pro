@@ -1,8 +1,8 @@
 """Canonical Story/TextFrame runtime for PageMaker Pro.
 
-The Tk Text widgets are the editing surface, but the complete document story
-and its threaded frame sequence live here. This makes flow deterministic and
-keeps the model independent of the UI renderer.
+The Tk Text widgets are the editing surface, but one Story owns the complete
+text. TextFrames are ordered containers; this runtime keeps the two views in
+sync without making Tk's widgets the DTP data model.
 """
 from flow_engine import FlowEngine
 
@@ -20,32 +20,34 @@ class StoryRuntime:
         self.active_story_id = story.id
         return story
 
+    def story(self):
+        return self.document.stories.get(self.active_story_id)
+
     def set_text(self, story, text):
         story.text = text or ""
 
     def attach_frames(self, story, mode="next_column"):
-        """Attach every document text frame to one canonical story."""
-        story.frame_ids = self.engine.ordered_frame_ids(self.document, mode)
-        for fid in story.frame_ids:
-            self.document.frames[fid].story_id = story.id
-        return list(story.frame_ids)
+        """Attach every document text frame to the one canonical story."""
+        ids = self.engine.ordered_frame_ids(self.document, mode)
+        story.frame_ids = ids
+        for fid, frame in self.document.frames.items():
+            frame.story_id = story.id if fid in ids else None
+        return list(ids)
 
     def ordered_frame_ids(self, story):
         return list(story.frame_ids)
 
     @staticmethod
     def capacity_for_frame(frame, chars_per_line=95, line_height=17):
-        """Conservative character capacity used by the model until a real
-        typography engine is introduced. It is deliberately based on frame
-        geometry rather than Tk widget internals.
-        """
+        """Conservative geometry-based capacity until real text layout exists."""
         lines = max(1, int(frame.rect.height / line_height))
         chars = max(8, int(frame.rect.width / 7.2))
         return max(80, lines * min(chars, chars_per_line))
 
     def capacities(self, story):
         return [self.capacity_for_frame(self.document.frames[fid])
-                for fid in story.frame_ids]
+                for fid in story.frame_ids
+                if fid in self.document.frames]
 
     def distribute(self, story, capacities=None, mode="next_column"):
         self.attach_frames(story, mode)
@@ -53,6 +55,11 @@ class StoryRuntime:
             capacities = self.capacities(story)
         return self.engine.distribute(self.document, story, capacities,
                                       mode=mode, frame_ids=story.frame_ids)
+
+    def clear_frame_text(self, story):
+        for fid in story.frame_ids:
+            if fid in self.document.frames:
+                self.document.frames[fid].text = ""
 
     def sync_frames_from_result(self, story, result):
         for item in result:
