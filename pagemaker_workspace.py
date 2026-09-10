@@ -21,13 +21,15 @@ import phase19_threading_ui  # noqa: F401
 import phase20_text_frame_tools  # noqa: F401
 import phase21_text_engine  # noqa: F401
 import phase22_objects_tables  # noqa: F401
+import phase23_document_system  # noqa: F401
 
 @dataclass
 class ViewState:
     active_page:int=0; zoom:float=.72; fit_page:bool=True; pasteboard:int=260
 
 class WorkspaceController:
-    def __init__(self,document=None): self.document=document; self.view=ViewState()
+    def __init__(self,document=None):
+        self.document=document; self.view=ViewState()
     def page_count(self): return len(getattr(self.document,"pages",[])) if self.document else 0
     def goto_page(self,index):
         count=self.page_count(); self.view.active_page=0 if not count else max(0,min(int(index),count-1)); return self.view.active_page
