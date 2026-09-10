@@ -6,6 +6,7 @@ import phase5_canvas  # noqa: F401
 import phase5_bootstrap  # noqa: F401
 import phase6_object_editing  # noqa: F401
 import phase7_text_engine  # noqa: F401
+import phase8_images  # noqa: F401
 
 
 @dataclass
