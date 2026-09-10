@@ -21,6 +21,11 @@ jobs:
           python-version: '3.11'
           cache: pip
 
+      - name: Verify Windows Tkinter runtime
+        shell: pwsh
+        run: |
+          python -c "import tkinter, _tkinter; print('tkinter:', tkinter.__file__); print('_tkinter:', _tkinter.__file__)"
+
       - name: Install dependencies
         run: python -m pip install -r requirements.txt pyinstaller pytest
 
@@ -45,7 +50,7 @@ jobs:
       - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
-          name: PageMaker-Pro-Windows
+          name: PageMaker-Pro-Windows-v4
           path: dist/PageMaker-Pro.exe
           if-no-files-found: error
           retention-days: 30
