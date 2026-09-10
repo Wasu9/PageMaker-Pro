@@ -1,17 +1,11 @@
-"""PageMaker-style workspace controller for PageMaker Pro.
-
-Keeps the document model independent from the screen. The UI can use this
-controller to show one active page, navigate by page number, and maintain a
-pasteboard around the page.
-"""
+"""PageMaker-style workspace controller for PageMaker Pro."""
 from dataclasses import dataclass
 
-# Visual layers load before App construction. They preserve the canonical
-# Document/Story model and only add workspace/object interaction.
 import phase4_visual  # noqa: F401
 import phase5_canvas  # noqa: F401
 import phase5_bootstrap  # noqa: F401
 import phase6_object_editing  # noqa: F401
+import phase7_text_engine  # noqa: F401
 
 
 @dataclass
