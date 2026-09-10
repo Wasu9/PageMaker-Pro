@@ -9,6 +9,7 @@ import phase7_text_engine  # noqa: F401
 import phase8_images  # noqa: F401
 import phase9_tables  # noqa: F401
 import phase10_master_pages  # noqa: F401
+import phase11_export  # noqa: F401
 
 @dataclass
 class ViewState:
