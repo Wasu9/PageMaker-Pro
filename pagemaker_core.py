@@ -2,14 +2,12 @@
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 
-
 @dataclass
 class Rect:
     x: float
     y: float
     width: float
     height: float
-
 
 @dataclass
 class TextFrame:
@@ -21,7 +19,6 @@ class TextFrame:
     locked: bool = False
     visible: bool = True
 
-
 @dataclass
 class ImageObject:
     id: str
@@ -29,6 +26,27 @@ class ImageObject:
     path: str = ""
     locked: bool = False
 
+@dataclass
+class TableObject:
+    id: str
+    rect: Rect
+    rows: int = 2
+    cols: int = 2
+    cells: List[List[str]] = field(default_factory=list)
+    row_heights: List[float] = field(default_factory=list)
+    col_widths: List[float] = field(default_factory=list)
+    locked: bool = False
+    border: bool = True
+    cell_padding: float = 5.0
+
+    def __post_init__(self):
+        self.rows=max(1,int(self.rows)); self.cols=max(1,int(self.cols))
+        if not self.cells: self.cells=[["" for _ in range(self.cols)] for _ in range(self.rows)]
+        else:
+            self.cells=[list(r[:self.cols])+[""]*max(0,self.cols-len(r)) for r in self.cells[:self.rows]]
+            while len(self.cells)<self.rows: self.cells.append([""]*self.cols)
+        if len(self.row_heights)!=self.rows: self.row_heights=[self.rect.height/self.rows]*self.rows
+        if len(self.col_widths)!=self.cols: self.col_widths=[self.rect.width/self.cols]*self.cols
 
 @dataclass
 class Page:
@@ -41,7 +59,6 @@ class Page:
     master: str = "A-Master"
     objects: List[Any] = field(default_factory=list)
     frame_ids: List[str] = field(default_factory=list)
-
 
 @dataclass
 class MasterPage:
@@ -56,113 +73,80 @@ class MasterPage:
     watermark: str = ""
     border: bool = True
 
-
 @dataclass
 class Story:
     id: str
     text: str = ""
     frame_ids: List[str] = field(default_factory=list)
 
-
 class Document:
     def __init__(self):
-        self.page_width = 794
-        self.page_height = 1123
-        self.pages: List[Page] = []
-        self.masters: Dict[str, MasterPage] = {"A-Master": MasterPage()}
-        self.stories: Dict[str, Story] = {}
-        self.frames: Dict[str, TextFrame] = {}
-        self.images: Dict[str, ImageObject] = {}
-        self.next_page_number = 1
-        self._id_counter = 1
+        self.page_width=794; self.page_height=1123; self.pages=[]
+        self.masters={"A-Master":MasterPage()}; self.stories={}; self.frames={}; self.images={}; self.tables={}
+        self.next_page_number=1; self._id_counter=1
 
-    def new_id(self, prefix="obj"):
-        value = f"{prefix}-{self._id_counter}"
-        self._id_counter += 1
-        return value
+    def new_id(self,prefix="obj"):
+        value=f"{prefix}-{self._id_counter}"; self._id_counter+=1; return value
 
-    def add_page(self, master="A-Master"):
-        m = self.masters[master]
-        p = Page(self.next_page_number, self.page_width, self.page_height,
-                 m.margin, m.columns, m.column_gap, master)
-        self.pages.append(p)
-        self.next_page_number += 1
-        return p
+    def add_page(self,master="A-Master"):
+        m=self.masters[master]; p=Page(self.next_page_number,self.page_width,self.page_height,m.margin,m.columns,m.column_gap,master)
+        self.pages.append(p); self.next_page_number+=1; return p
 
-    def add_story(self, text=""):
-        s = Story(self.new_id("story"), text)
-        self.stories[s.id] = s
-        return s
+    def add_story(self,text=""):
+        s=Story(self.new_id("story"),text); self.stories[s.id]=s; return s
 
-    def add_text_frame(self, page: Page, rect: Rect, story: Optional[Story] = None,
-                       column=0):
-        f = TextFrame(self.new_id("frame"), rect, column,
-                      story.id if story else None)
-        self.frames[f.id] = f
-        page.objects.append(f.id)
-        page.frame_ids.append(f.id)
-        if story:
-            story.frame_ids.append(f.id)
+    def add_text_frame(self,page,rect,story=None,column=0):
+        f=TextFrame(self.new_id("frame"),rect,column,story.id if story else None); self.frames[f.id]=f
+        page.objects.append(f.id); page.frame_ids.append(f.id)
+        if story: story.frame_ids.append(f.id)
         return f
 
-    def add_image(self, page: Page, rect: Rect, path=""):
-        image = ImageObject(self.new_id("image"), rect, path or "")
-        self.images[image.id] = image
-        page.objects.append(image.id)
-        return image
+    def add_image(self,page,rect,path=""):
+        image=ImageObject(self.new_id("image"),rect,path or ""); self.images[image.id]=image; page.objects.append(image.id); return image
 
-    def find_frame(self, frame_id):
-        return self.frames.get(frame_id)
+    def add_table(self,page,rect,rows=2,cols=2):
+        table=TableObject(self.new_id("table"),rect,rows,cols); self.tables[table.id]=table; page.objects.append(table.id); return table
 
-    def find_image(self, image_id):
-        return self.images.get(image_id)
+    def find_frame(self,frame_id): return self.frames.get(frame_id)
+    def find_image(self,image_id): return self.images.get(image_id)
+    def find_table(self,table_id): return self.tables.get(table_id)
 
-    def frame_order(self, page: Page):
-        return sorted((self.frames[x] for x in page.frame_ids if x in self.frames),
-                      key=lambda f: (f.column, f.rect.y, f.rect.x))
+    def frame_order(self,page):
+        return sorted((self.frames[x] for x in page.frame_ids if x in self.frames),key=lambda f:(f.column,f.rect.y,f.rect.x))
 
-    def move_frame(self, frame_id, x, y):
-        frame = self.frames.get(frame_id)
-        if not frame or frame.locked:
-            return False
-        frame.rect.x = float(x)
-        frame.rect.y = float(y)
-        return True
+    def move_frame(self,frame_id,x,y):
+        f=self.frames.get(frame_id)
+        if not f or f.locked:return False
+        f.rect.x=float(x); f.rect.y=float(y); return True
 
-    def resize_frame(self, frame_id, width, height):
-        frame = self.frames.get(frame_id)
-        if not frame or frame.locked:
-            return False
-        frame.rect.width = max(20.0, float(width))
-        frame.rect.height = max(20.0, float(height))
-        return True
+    def resize_frame(self,frame_id,width,height):
+        f=self.frames.get(frame_id)
+        if not f or f.locked:return False
+        f.rect.width=max(20.,float(width)); f.rect.height=max(20.,float(height)); return True
 
-    def move_image(self, image_id, x, y):
-        image = self.images.get(image_id)
-        if not image or image.locked:
-            return False
-        image.rect.x = float(x)
-        image.rect.y = float(y)
-        return True
+    def move_image(self,image_id,x,y):
+        i=self.images.get(image_id)
+        if not i or i.locked:return False
+        i.rect.x=float(x); i.rect.y=float(y); return True
 
-    def resize_image(self, image_id, width, height):
-        image = self.images.get(image_id)
-        if not image or image.locked:
-            return False
-        image.rect.width = max(20.0, float(width))
-        image.rect.height = max(20.0, float(height))
-        return True
+    def resize_image(self,image_id,width,height):
+        i=self.images.get(image_id)
+        if not i or i.locked:return False
+        i.rect.width=max(20.,float(width)); i.rect.height=max(20.,float(height)); return True
+
+    def move_table(self,table_id,x,y):
+        t=self.tables.get(table_id)
+        if not t or t.locked:return False
+        t.rect.x=float(x); t.rect.y=float(y); return True
+
+    def resize_table(self,table_id,width,height):
+        t=self.tables.get(table_id)
+        if not t or t.locked:return False
+        t.rect.width=max(30.,float(width)); t.rect.height=max(20.,float(height)); return True
 
     def serialize(self):
-        return {
-            "version": 4,
-            "page_width": self.page_width,
-            "page_height": self.page_height,
-            "masters": {k: asdict(v) for k, v in self.masters.items()},
-            "pages": [asdict(p) for p in self.pages],
-            "stories": {k: asdict(v) for k, v in self.stories.items()},
-            "frames": {k: asdict(v) for k, v in self.frames.items()},
-            "images": {k: asdict(v) for k, v in self.images.items()},
-            "next_page_number": self.next_page_number,
-            "id_counter": self._id_counter,
-        }
+        return {"version":5,"page_width":self.page_width,"page_height":self.page_height,
+                "masters":{k:asdict(v) for k,v in self.masters.items()},"pages":[asdict(p) for p in self.pages],
+                "stories":{k:asdict(v) for k,v in self.stories.items()},"frames":{k:asdict(v) for k,v in self.frames.items()},
+                "images":{k:asdict(v) for k,v in self.images.items()},"tables":{k:asdict(v) for k,v in self.tables.items()},
+                "next_page_number":self.next_page_number,"id_counter":self._id_counter}
