@@ -6,12 +6,18 @@ pasteboard around the page.
 """
 from dataclasses import dataclass
 
+# Imported here so the visual interaction layer is loaded before the main App
+# is constructed. It wraps Tk safely and does not alter the document model.
+import phase4_visual  # noqa: F401
+
+
 @dataclass
 class ViewState:
     active_page: int = 0
     zoom: float = 0.72
     fit_page: bool = True
     pasteboard: int = 260
+
 
 class WorkspaceController:
     def __init__(self, document=None):
