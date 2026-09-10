@@ -1,6 +1,17 @@
 import json, os, tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog, colorchooser
 
+# IMPORTANT: the professional DTP interaction layer must be loaded explicitly
+# in the frozen Windows application. PyInstaller's hidden-import list alone
+# does not execute sitecustomize.py, so without this import the EXE falls back
+# to the old multi-page prototype UI. sitecustomize installs the canonical
+# document model, single-page pasteboard workspace, page navigation, frame
+# selection/threading and object interaction layer immediately after App init.
+try:
+    import sitecustomize  # noqa: F401
+except Exception:
+    sitecustomize = None
+
 APP_TITLE = 'PageMaker Pro — Offline Unicode DTP'
 DEFAULTS = {
     'page_w': 794, 'page_h': 1123, 'margin': 45, 'gap': 24, 'columns': 2,
