@@ -4,9 +4,20 @@ import os, tempfile, tkinter as tk
 from tkinter import messagebox
 from pagemaker_core import Rect
 
-_SUP = str.maketrans({'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','=','⁼','(':'⁽',')':'⁾','n':'ⁿ','i':'ⁱ','a':'ᵃ','e':'ᵉ','o':'ᵒ','x':'ˣ','A':'ᴬ','B':'ᴮ','D':'ᴰ','E':'ᴱ','G':'ᴳ','H':'ᴴ','I':'ᴵ','J':'ᴶ','K':'ᴷ','L':'ᴸ','M':'ᴹ','N':'ᴺ','O':'ᴼ','P':'ᴾ','R':'ᴿ','T':'ᵀ','U':'ᵁ','V':'ⱽ','W':'ᵂ'})
-_SUB = str.maketrans({'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋','=':'₌','(':'₍',')':'₎','a':'ₐ','e':'ₑ','h':'ₕ','i':'ᵢ','j':'ⱼ','k':'ₖ','l':'ₗ','m':'ₘ','n':'ₙ','o':'ₒ','p':'ₚ','r':'ᵣ','s':'ₛ','t':'ₜ','u':'ᵤ','v':'ᵥ','x':'ₓ','β':'ᵦ','γ':'ᵧ','ρ':'ᵨ','φ':'ᵩ','χ':'ᵪ'})
-MATH_GROUPS = ['α β γ δ θ λ μ π ρ σ φ ω Ω Δ Σ Φ Ψ √ ∛ ∜ ∞ ∑ ∏ ∫ ∬ ∂ ∇ ± × ÷ ≠ ≈ ≤ ≥ < > ∝ ∴ ∵ → ← ↔ ⇒ ⇔ ↦ ∈ ∉ ∩ ∪ ∅ ∀ ∃','½ ⅓ ⅔ ¼ ¾ ⅕ ⅖ ⅗ ⅘ ⅙ ⅚ ⅛ ⅜ ⅝ ⅞','⁰¹²³⁴⁵⁶⁷⁸⁹ ⁺⁻⁼⁽⁾ ⁿ ⁱ','₀₁₂₃₄₅₆₇₈₉ ₊₋₌₍₎ ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ','H₂O CO₂ SO₄²⁻ NH₄⁺ Ca²⁺ Al³⁺ x² y² a₁ b₂']
+_SUP = str.maketrans({
+    '0':'\u2070','1':'\u00b9','2':'\u00b2','3':'\u00b3','4':'\u2074','5':'\u2075','6':'\u2076','7':'\u2077','8':'\u2078','9':'\u2079',
+    '+':'\u207a','-':'\u207b','=':'\u207c','(':'\u207d',')':'\u207e','n':'\u207f','i':'\u2071','a':'\u1d43','e':'\u1d49','o':'\u1d52','x':'\u02e3',
+    'A':'\u1d2c','B':'\u1d2e','D':'\u1d30','E':'\u1d31','G':'\u1d33','H':'\u1d34','I':'\u1d35','J':'\u1d36','K':'\u1d37','L':'\u1d38','M':'\u1d39','N':'\u1d3a','O':'\u1d3c','P':'\u1d3e','R':'\u1d3f','T':'\u1d40','U':'\u1d41','V':'\u2c7d','W':'\u1d42'})
+_SUB = str.maketrans({
+    '0':'\u2080','1':'\u2081','2':'\u2082','3':'\u2083','4':'\u2084','5':'\u2085','6':'\u2086','7':'\u2087','8':'\u2088','9':'\u2089',
+    '+':'\u208a','-':'\u208b','=':'\u208c','(':'\u208d',')':'\u208e','a':'\u2090','e':'\u2091','h':'\u2095','i':'\u1d62','j':'\u2c7c','k':'\u2096','l':'\u2097','m':'\u2098','n':'\u2099','o':'\u2092','p':'\u209a','r':'\u1d63','s':'\u209b','t':'\u209c','u':'\u1d64','v':'\u1d65','x':'\u2093','\u03b2':'\u1d66','\u03b3':'\u1d67','\u03c1':'\u1d68','\u03c6':'\u1d69','\u03c7':'\u1d6a'})
+MATH_GROUPS = [
+    '\u03b1 \u03b2 \u03b3 \u03b4 \u03b8 \u03bb \u03bc \u03c0 \u03c1 \u03c3 \u03c6 \u03c9 \u03a9 \u0394 \u03a3 \u03a6 \u03a8 \u221a \u221b \u221c \u221e \u2211 \u220f \u222b \u222c \u2202 \u2207 \u00b1 \u00d7 \u00f7 \u2260 \u2248 \u2264 \u2265 < > \u221d \u2234 \u2235 \u2192 \u2190 \u2194 \u21d2 \u21d4 \u21a6 \u2208 \u2209 \u2229 \u222a \u2205 \u2200 \u2203',
+    '\u00bd \u2153 \u2154 \u00bc \u00be \u2155 \u2156 \u2157 \u2158 \u2159 \u215a \u215b \u215c \u215d \u215e',
+    '\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079 \u207a\u207b\u207c\u207d\u207e \u207f \u2071',
+    '\u2080\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089 \u208a\u208b\u208c\u208d\u208e \u2090\u2091\u2095\u1d62\u2c7c\u2096\u2097\u2098\u2099\u2092\u209a\u1d63\u209b\u209c\u1d64\u1d65\u2093',
+    'H\u2082O CO\u2082 SO\u2084\u00b2\u207b NH\u2084\u207a Ca\u00b2\u207a Al\u00b3\u207a x\u00b2 y\u00b2 a\u2081 b\u2082'
+]
 
 def _active(app): return getattr(app,'active',None)
 def _frame_key(app,w):
@@ -89,7 +100,7 @@ def style_selection(app,kind):
     if not w:return 'break'
     try:src=w.get('sel.first','sel.last')
     except tk.TclError:src=''
-    out=src.translate(_SUP if kind=='sup' else _SUB) if src else ('²' if kind=='sup' else '₂')
+    out=src.translate(_SUP if kind=='sup' else _SUB) if src else ('\u00b2' if kind=='sup' else '\u2082')
     _replace_selection(w,out,kind);app.changed(w);return 'break'
 
 def math_dialog(app):
@@ -126,7 +137,6 @@ def table_dialog(app,match=False):
     tk.Button(top,text='Rebuild',command=build).pack(side='left',padx=10);tk.Button(win,text='Insert into Question Flow',command=insert_table).pack(pady=10)
 
 def _guard(app,w,event):
-    # Built-in columns never move in Select mode. Text mode keeps normal editing.
     if getattr(app,'_pm_select_mode',True):return 'break'
     if event.state & 0x0004 and event.keysym.lower()=='a':return select_column(app,w)
     if event.state & 0x0004 and event.keysym.lower()=='c' and getattr(app,'_pm25_column_widgets',None):return copy_column(app,event)
@@ -138,8 +148,7 @@ def _lock_columns(app):
         for w in getattr(p,'texts',[]):
             try:w.tag_configure('pm25_column_selection',background='#4a78c2',foreground='#ffffff')
             except Exception:pass
-            tags=list(w.bindtags())
-            tag='PM25_'+str(id(w))
+            tags=list(w.bindtags());tag='PM25_'+str(id(w))
             if tag not in tags:
                 w.bindtags((tag,)+tuple(tags));w.bind_class(tag,'<Button-1>',lambda e,w=w:_guard(app,w,e));w.bind_class(tag,'<B1-Motion>',lambda e,w=w:_guard(app,w,e));w.bind_class(tag,'<ButtonRelease-1>',lambda e,w=w:_guard(app,w,e));w.bind_class(tag,'<Control-KeyPress-a>',lambda e,w=w:select_column(app,w));w.bind_class(tag,'<Control-KeyPress-A>',lambda e,w=w:select_column(app,w));w.bind_class(tag,'<Control-KeyPress-c>',lambda e:copy_column(app,e));w.bind_class(tag,'<Control-KeyPress-C>',lambda e:copy_column(app,e));w.bind_class(tag,'<Control-KeyPress-v>',lambda e,w=w:paste(app,w));w.bind_class(tag,'<Control-KeyPress-V>',lambda e,w=w:paste(app,w))
     app._pm25_lock_columns=True
@@ -162,7 +171,7 @@ def install(app_cls):
             for i in range(menu.index('end')+1):
                 try:
                     if menu.entrycget(i,'label')=='Insert':
-                        sub=menu.nametowidget(menu.entrycget(i,'menu'));sub.add_separator();sub.add_command(label='Match Columns Table…',command=self.match_table);break
+                        sub=menu.nametowidget(menu.entrycget(i,'menu'));sub.add_separator();sub.add_command(label='Match Columns Table...',command=self.match_table);break
                 except Exception:pass
         except Exception:pass
     app_cls.__init__=init
